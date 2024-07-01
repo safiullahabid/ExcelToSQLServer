@@ -1,0 +1,240 @@
+﻿@{
+    ViewData["Title"] = "Timesheet Import";
+}
+<style>
+    #dragandrophandler {
+        border: 2px dotted #0B85A1;
+        color: #92AAB0;
+        height: 20vh;
+        text-align: center;
+        vertical-align: middle;
+        padding: 10px 10px 10 10px;
+        margin-bottom: 10px;
+        font-size: 200%;
+    }
+
+    .progressBar {
+        width: 200px;
+        height: 22px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        overflow: hidden;
+        display: inline-block;
+        margin: 0px 10px 5px 5px;
+        vertical-align: top;
+    }
+
+        .progressBar div {
+            height: 100%;
+            color: #fff;
+            text-align: center;
+            line-height: 22px; /* same as #progressBar height if we want text middle aligned */
+            width: 0;
+            background-color: #0ba1b5;
+            border-radius: 3px;
+        }
+
+    .statusbar {
+        border-top: 1px solid #A9CCD1;
+        min-height: 25px;
+        padding: 10px 10px 0px 10px;
+        vertical-align: top;
+    }
+
+        .statusbar:nth-child(odd) {
+            background: #EBEFF0;
+        }
+
+    .filename {
+        display: inline-block;
+        vertical-align: top;
+        width: 300px;
+    }
+
+    .filesize {
+        display: inline-block;
+        vertical-align: top;
+        color: #30693D;
+        width: 100px;
+        margin-left: 10px;
+        margin-right: 5px;
+    }
+
+    .abort {
+        background-color: #A8352F;
+        -moz-border-radius: 4px;
+        -webkit-border-radius: 4px;
+        border-radius: 4px;
+        display: inline-block;
+        color: #fff;
+        font-family: arial;
+        font-size: 13px;
+        font-weight: normal;
+        padding: 4px 15px;
+        cursor: pointer;
+        vertical-align: top
+    }
+</style>
+<div class="text-center">
+    <br /><br />
+    <h1 class="display-4">Welcome</h1>
+
+    <p>Upload Timesheet, please</p>
+    <br />
+
+    <form asp-action="Index" method="post" enctype="multipart/form-data">
+        <div class="form-group row">
+            <div class="col-md-10 unit"><input class="form-control" type="file" name="file" /></div>
+            <div class="col-md-2 unit"><button type="submit" class="btn btn-primary">Upload</button></div>
+            <div class="col-md-12 unit m-0 mt-3">OR</div>
+        </div>
+    </form>
+
+
+    <div class="row d-flex justify-content-center align-items-center">
+        <div id="dragandrophandler" class="col-md-12 mt-3">Drag & Drop Timesheet(s) Here</div>
+
+        <div id="status1" class="col-md-12"></div>
+    </div>
+    <script>
+        function sendFileToServer(formData, status) {
+            var uploadURL = "Home/Index"; //Upload URL
+            var extraData = {}; //Extra Data.
+            var jqXHR = $.ajax({
+                xhr: function () {
+                    var xhrobj = $.ajaxSettings.xhr();
+                    if (xhrobj.upload) {
+                        xhrobj.upload.addEventListener('progress', function (event) {
+                            var percent = 0;
+                            var position = event.loaded || event.position;
+                            var total = event.total;
+                            if (event.lengthComputable) {
+                                percent = Math.ceil(position / total * 100);
+                            }
+                            //Set progress
+                            status.setProgress(percent);
+                        }, false);
+                    }
+                    return xhrobj;
+                },
+                url: uploadURL,
+                type: "POST",
+                contentType: false,
+                processData: false,
+                cache: false,
+                data: formData,
+                success: function (data) {
+                    if (data.success) {
+                        // Handle success
+                        status.setProgress(100);
+                        $("#status1").html("<div class='text-success fw-bold'>" + data.message + "</div>");
+                    }
+                    else {
+                        // Handle error returned from server
+                        $("#status1").html("<div class='text-danger fw-bold'>" + data.message + "</div>");
+                    }
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    // Handle error in AJAX request itself
+                    $("#status1").html("<div class='text-danger fw-bold'>Error: " + errorThrown + "</div>");
+                }
+            });
+            status.setAbort(jqXHR);
+        }
+        var rowCount = 0;
+        function createStatusbar(obj) {
+            rowCount++;
+            var row = "odd";
+            if (rowCount % 2 == 0) row = "even";
+            this.statusbar = $("<div class='statusbar row " + row + "'></div>");
+            this.filename = $("<div class='filename col-md-6 unit'></div>").appendTo(this.statusbar);
+            this.size = $("<div class='filesize col-md-1 unit'></div>").appendTo(this.statusbar);
+            this.progressBar = $("<div class='progressBar col-md-3 p-0 unit'><div></div></div>").appendTo(this.statusbar);
+            this.stateSuccess = $("<div class='stateSuccess col-md-1 unit text-success fw-bold'>Complete.</div>").appendTo(this.statusbar);
+            this.abort = $("<div class='abort col-md-2 unit'>Abort</div>").appendTo(this.statusbar);
+            this.stateError = $("<div class='stateError col-md-1 unit text-danger fw-bold'>Failed.</div>").appendTo(this.statusbar);
+
+
+            obj.after(this.statusbar);
+            this.setFileNameSize = function (name, size) {
+                var sizeStr = "";
+                var sizeKB = size / 1024;
+                if (parseInt(sizeKB) > 1024) {
+                    var sizeMB = sizeKB / 1024;
+                    sizeStr = sizeMB.toFixed(2) + " MB";
+                }
+                else {
+                    sizeStr = sizeKB.toFixed(2) + " KB";
+                }
+                this.filename.html(name);
+                this.size.html(sizeStr);
+            }
+            this.setProgress = function (progress) {
+                var progressBarWidth = progress * this.progressBar.width() / 100;
+                this.progressBar.find('div').animate({ width: progressBarWidth }, 10).html(progress + "% ");
+                if (parseInt(progress) >= 100) {
+                    this.abort.hide();
+                    this.stateError.hide();
+                    this.stateSuccess.show();
+                }
+            }
+            this.setAbort = function (jqxhr) {
+                var sb = this.statusbar;
+                this.abort.click(function () {
+                    jqxhr.abort();
+                    sb.hide();
+                    this.stateError.show();
+                });
+            }
+        }
+        function handleFileUpload(files, obj) {
+            for (var i = 0; i < files.length; i++) {
+                var fd = new FormData();
+                fd.append('file', files[i]);
+
+                var fileExtension = files[i].name.split('.').pop();
+                if (fileExtension == "xls" || fileExtension == "xlsx")
+                {
+                    var status = new createStatusbar(obj); //Using this we can set progress.
+                    status.setFileNameSize(files[i].name, files[i].size);
+                    sendFileToServer(fd, status);
+                }
+                else {
+                    $("#status1").html("<div class='text-danger fw-bold'>Note : Please upload only MS Excel File(s).</div>");
+                }
+            }
+        }
+        $(document).ready(function () {
+            var obj = $("#dragandrophandler");
+            obj.on('dragenter', function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+                $(this).css('border', '2px solid #0B85A1');
+            });
+            obj.on('dragover', function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            });
+            obj.on('drop', function (e) {
+                $(this).css('border', '2px dotted #0B85A1');
+                e.preventDefault();
+                var files = e.originalEvent.dataTransfer.files;
+                //We need to send dropped files to Server
+                handleFileUpload(files, obj);
+            });
+            $(document).on('dragenter', function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            });
+            $(document).on('dragover', function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+                obj.css('border', '2px dotted #0B85A1');
+            });
+            $(document).on('drop', function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            });
+        });
+    </script>
+</div>
